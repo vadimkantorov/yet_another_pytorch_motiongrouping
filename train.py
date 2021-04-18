@@ -28,7 +28,7 @@ def build_dataset(args, filter = None):
     assert os.path.exists(args.dataset_root_dir), f'provided dataset path [{args.dataset_root_dir}] does not exist'
     
     if args.dataset == 'DAVIS':
-        dataset = davis.DAVIS(args.dataset_root_dir, args.split_name, root_flow = args.dataset_root_dir_flow, resolution = args.dataset_resolution, year = args.dataset_year, dt = args.dt, filter = filter)
+        dataset = davis.DAVIS(args.dataset_root_dir, args.dataset_split_name, root_flow = args.dataset_root_dir_flow, resolution = args.dataset_resolution, year = args.dataset_year, dt = args.dataset_dt, filter = filter)
         batch_frontend = None # models.ClevrImagePreprocessor(resolution = args.resolution, crop = args.crop)
         collate_fn = torch.utils.data.dataloader.default_collate
 

@@ -21,7 +21,7 @@ def main(args):
     model = build_optical_flow_model(args)
     dataset, collate_fn, batch_frontend = train.build_dataset(args)
 
-    print(args.dataset_root_dir_flow)
+    print(args.checkpoint, args.dataset_root_dir, args.dataset_root_dir_flow)
     for idx, (frames_paths, frames, flow_paths, flow) in enumerate(dataset):
         assert frames.shape[-1] % 8 == 0 and frames.shape[-1] % 8 == 0
 
@@ -39,19 +39,19 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mixed-precision', action='store_true', help='use mixed precision')
-    parser.add_argument('--alternate-corr', action='store_true', help='use efficent correlation implementation')
-    parser.add_argument('--device', default = 'cpu')
-    parser.add_argument('--checkpoint', help="restore checkpoint", default = '../selfsupslots/data/common/raft/models/raft-things.pth')
+    parser.add_argument('--checkpoint', help="restore checkpoint", default = 'data/common/raft/models/raft-things.pth')
+    parser.add_argument('--mixed-precision', action = 'store_true')
+    parser.add_argument('--alternate-corr', action = 'store_true')
     parser.add_argument('--small', action = 'store_true')
     parser.add_argument('--num-iter', type = int, default = 20)
+    parser.add_argument('--device', default = 'cpu')
     
     parser.add_argument('--dataset', default = 'DAVIS', choices = ['DAVIS'])
-    parser.add_argument('--dataset-root-dir', default = '../selfsupslots/data/common/DAVIS')
-    parser.add_argument('--dataset-root-dir-flow', default = '../selfsupslots/data/common/DAVISflow')
-    parser.add_argument('--dataset-year', type = int, default = 2017)
+    parser.add_argument('--dataset-root-dir', default = 'data/common/DAVIS')
+    parser.add_argument('--dataset-root-dir-flow', default = 'data/common/DAVISflow')
+    parser.add_argument('--dataset-year', type = int, default = 2016)
     parser.add_argument('--dataset-resolution', default = '480p')
-    parser.add_argument('--split-name', default = 'train', choices = ['train', 'val'])
-    parser.add_argument('--dt', type = int, action = 'append', default = [0, -2, -1, 1, 2])
+    parser.add_argument('--dataset-split-name', default = 'train', choices = ['train', 'val'])
+    parser.add_argument('--dataset-dt', type = int, action = 'append', default = [0, -2, -1, 1, 2])
 
     main(parser.parse_args())
