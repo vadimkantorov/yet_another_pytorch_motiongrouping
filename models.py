@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import transforms as T
 import torchvision
 
 class ClevrImagePreprocessor(nn.Module):

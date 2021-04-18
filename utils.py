@@ -1,3 +1,5 @@
+import numpy as np
+
 def make_colorwheel():
     """
     Generates a color wheel for optical flow visualization as presented in:
@@ -110,4 +112,4 @@ def flow_to_image(flow_uv, clip_flow=None, convert_to_bgr=False):
     epsilon = 1e-5
     u = u / (rad_max + epsilon)
     v = v / (rad_max + epsilon)
-    r
+    return flow_uv_to_colors(u, v, convert_to_bgr)

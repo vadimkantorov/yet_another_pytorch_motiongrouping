@@ -28,8 +28,8 @@ def build_dataset(args, filter = None):
     assert os.path.exists(args.dataset_root_dir), f'provided dataset path [{args.dataset_root_dir}] does not exist'
     
     if args.dataset == 'DAVIS':
-        dataset = davis.DAVIS(args.dataset_root_dir, args.split_name, filter = filter)
-        batch_frontend = models.ClevrImagePreprocessor(resolution = args.resolution, crop = args.crop)
+        dataset = davis.DAVIS(args.dataset_root_dir, args.split_name, root_flow = args.dataset_root_dir_flow, resolution = args.dataset_resolution, year = args.dataset_year, dt = args.dt, filter = filter)
+        batch_frontend = None # models.ClevrImagePreprocessor(resolution = args.resolution, crop = args.crop)
         collate_fn = torch.utils.data.dataloader.default_collate
 
     return dataset, collate_fn, batch_frontend
@@ -104,13 +104,9 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint')
     parser.add_argument('--checkpoint-epoch-interval', type = int, default = 10)
     parser.add_argument('--checkpoint-pattern', default = 'ckpt_{epoch:04d}.pt')
-    parser.add_argument('--checkpoint-tensorflow')
     parser.add_argument('--dataset', default = 'CLEVR', choices = ['CLEVR', 'COCO'])
     parser.add_argument('--dataset-root-dir', default = './CLEVR_v1.0')
     parser.add_argument('--split-name', default = 'train', choices = ['train', 'val'])
-    parser.add_argument('--coco-year', type = int, default = 2017)
-    parser.add_argument('--coco-masks', action = 'store_true')
-    parser.add_argument('--coco-mode', default = 'instances')
     args = parser.parse_args()
 
     main(args)
