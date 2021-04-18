@@ -24,20 +24,24 @@ def build_model(args):
 
     return model
 
-def build_dataset(args, filter = None):
+def build_dataset(args):
     assert os.path.exists(args.dataset_root_dir), f'provided dataset path [{args.dataset_root_dir}] does not exist'
     
     if args.dataset == 'DAVIS':
-        dataset = davis.DAVIS(args.dataset_root_dir, args.dataset_split_name, root_flow = args.dataset_root_dir_flow, resolution = args.dataset_resolution, year = args.dataset_year, dt = args.dataset_dt, filter = filter)
+        dataset = davis.DAVIS(args.dataset_root_dir, args.dataset_split_name, root_flow = args.dataset_root_dir_flow, resolution = args.dataset_resolution, year = args.dataset_year, dt = args.dataset_dt, read_frames = False)
         batch_frontend = models.FlowPreprocessor(resolution = args.resolution, crop = args.crop)
         collate_fn = lambda batch, default_collate = torch.utils.data.dataloader.default_collate: ( [b[0] for b in batch], default_collate([b[1] for b in batch]), [b[2] for b in batch], default_collate([b[3] for b in batch]) )
 
     return dataset, collate_fn, batch_frontend
 
+def sample_frames_flow(frames_flow):
+    idx = torch.stack([1 + torch.randperm(2, device = frames_flow.device) for b in range(len(frames_flow))])
+    return frames_flow.gather(1, idx[..., None, None, None].expand(-1, -1, *frames_flow.shape[-3:]))
+
 def main(args):
     os.makedirs(args.checkpoint_dir, exist_ok = True)
  
-    dataset, collate_fn, batch_frontend = build_dataset(args, filter = lambda scene_objects: len(scene_objects) <= 6)
+    dataset, collate_fn, batch_frontend = build_dataset(args)
     
     model = build_model(args)
 
@@ -61,13 +65,14 @@ def main(args):
             loss_scale_entropy = args.loss_scale_entropy * (args.gamma_regularization ** int(iteration / args.decay_steps))
             optimizer.param_groups[0]['lr'] = learning_rate
             
-            images = batch_frontend(images.to(args.device))
-            recon_combined, recons, masks, slots, attn = model(images)
-            loss = models.criterion(recon_combined, masks, images, loss_scale_reconstruction = args.loss_scale_reconstruction, loss_scale_consistency = loss_scale_consistency, loss_scale_entropy = loss_scale_entropy)
+            flow = sample_frames_flow(flow)
+            
+            flow = batch_frontend(flow.to(args.device))
+            
+            recon_combined, recons, masks, slots, attn = model(flow)
+            loss = models.criterion(recon_combined, masks, flow, loss_scale_reconstruction = args.loss_scale_reconstruction, loss_scale_consistency = loss_scale_consistency, loss_scale_entropy = loss_scale_entropy)
             loss_item = float(loss)
             total_loss += loss_item
-
-            del recons, masks, slots
 
             optimizer.zero_grad()
             loss.backward()

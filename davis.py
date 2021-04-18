@@ -4,10 +4,12 @@ import torch
 import torchvision
 
 class DAVIS(torchvision.datasets.VisionDataset):
-    def __init__(self, root, split_name, year = 2016, resolution = '480p', root_flow = None, transform = torchvision.transforms.ToTensor(), dt = [0, -2, -1, 1, 2], fmt = '{:05d}.jpg', filter = None, pad = lambda tensor, multiple = 8: tensor[..., : (tensor.shape[-2] // multiple) * multiple, : (tensor.shape[-1] // multiple) * multiple] ):
+    def __init__(self, root, split_name, year = 2016, resolution = '480p', root_flow = None, transform = torchvision.transforms.ToTensor(), dt = [0, -2, -1, 1, 2], fmt = '{:05d}.jpg', read_frames = True, pad = lambda tensor, multiple = 8: tensor[..., : (tensor.shape[-2] // multiple) * multiple, : (tensor.shape[-1] // multiple) * multiple] ):
         super().__init__(root, transform = transform)
         self.resolution = resolution
         self.pad = pad
+        self.read_frames = read_frames
+
         self.classes = list(map(str.strip, open(os.path.join(root, 'ImageSets', str(year), split_name + '.txt'))))
         frame_count = { class_name : 1 + int(os.path.splitext(sorted(os.listdir(os.path.join(root, 'JPEGImages', resolution, class_name)))[-1])[0] ) for class_name in self.classes }
 
@@ -22,8 +24,12 @@ class DAVIS(torchvision.datasets.VisionDataset):
     def __getitem__(self, idx):
         read_stack = lambda paths, **kwargs: self.pad(torch.stack([ torch.as_tensor(cv2.imread(frame_path)) for frame_path in paths ]).movedim(-1, 1)).flip(1).div(255.0) if paths and all(map(os.path.exists, paths)) else torch.empty(**kwargs)
         
-        frames = read_stack(self.frames[idx])
-        frames_flow = read_stack(self.frames_flow[idx], size = frames.shape, dtype = frames.dtype)
+        if self.read_frames:
+            frames = read_stack(self.frames[idx])
+            frames_flow = read_stack(self.frames_flow[idx], size = frames.shape, dtype = frames.dtype)
+        else:
+            frames_flow = read_stack(self.frames_flow[idx])
+            frames = read_stack(self.frames[idx], size = frames_flow.shape, dtype = frames_flow.dtype)
 
         return self.frames[idx], frames, self.frames_flow[idx], frames_flow
 
