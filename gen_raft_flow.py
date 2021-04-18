@@ -27,7 +27,11 @@ def main(args):
 
         frames = frames.to(args.device)
         img_src, img_dst, flow_dst = frames[:1], frames[1:], flow_paths[1:]
-        
+       
+        if all(map(os.path.exists, flow_dst)):
+            print(idx, '/', len(dataset), '. Skipping existing', flow_dst)
+            continue
+
         flow_lo, flow_hi = model(img_src.expand(len(img_dst), -1, -1, -1), img_dst, iters = args.num_iter, test_mode = True)
 
         os.makedirs(os.path.dirname(flow_dst[0]), exist_ok = True)
