@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-import vis
+import utils as vis
 sys.path.append('raft_core')
 from raft import RAFT
 from raft_utils.utils import InputPadder
