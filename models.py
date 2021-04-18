@@ -4,11 +4,22 @@ import torch.nn.functional as F
 
 import torchvision
 
-class ClevrImagePreprocessor(nn.Module):
-    def __init__(self, resolution, crop = tuple(), rgb_mean = 0.5, rgb_std = 0.5):
+def criterion(recon_combined, masks, images, loss_scale_reconstruction = 1, loss_scale_consistency = 1, loss_scale_entropy = 1, eps = 1e-15):
+    loss_reconstruction = F.mse_loss(recon_combined, images)
+    
+    # TODO: reduce only over spatial extent, and check the paper
+    # TODO: entropy over both flow fields?
+
+    masks_t_n1, masks_t_n2 = masks.chunk(2, dim = 0)
+    loss_consistency = torch.stack([F.mse_loss(masks_t_n1[:, 1], masks_t_n2[:, 1]), F.mse_loss(masks_t_n1[:, 1], masks_t_n2[:, 0])]).min()
+
+    loss_entropy = - (masks * (masks + eps).log()).mean()
+
+    return loss_scale_reconstruction * loss_reconstruction + loss_scale_consistency * loss_consistency + loss_scale_entropy * loss_entropy
+
+class FlowPreprocessor(nn.Module):
+    def __init__(self, resolution, rgb_mean = 0.5, rgb_std = 0.5):
         super().__init__()
-        self.rgb_mean = rgb_mean
-        self.rgb_std = rgb_std
         self.resolution = resolution
         self.crop = crop
         
@@ -16,15 +27,13 @@ class ClevrImagePreprocessor(nn.Module):
         assert img.is_floating_point()
         img = (img - self.rgb_mean) / self.rgb_std if normalize else img
 
-        img = img[..., self.crop[0]:self.crop[1], self.crop[2]:self.crop[3]] if self.crop else img
-
         img = F.interpolate(img, self.resolution, mode = interpolate_mode)
         img = img.clamp(-1 if normalize else 0, 1)
 
         return img
 
 class SlotAttention(nn.Module):
-    def __init__(self, num_iter, num_slots, input_size, slot_size, mlp_hidden_size, epsilon=1e-8, simple = False, project_inputs = False, gain = 1, temperature_factor = 1):
+    def __init__(self, num_iter, num_slots, input_size, slot_size, mlp_hidden_size, epsilon=1e-8, gain = 1, temperature_factor = 1):
         super().__init__()
         self.temperature_factor = temperature_factor
         self.num_iter = num_iter
@@ -39,7 +48,6 @@ class SlotAttention(nn.Module):
         self.norm_mlp    = nn.LayerNorm(slot_size)
 
         self.slots_mu        = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, 1, self.slot_size)))
-        self.slots_log_sigma = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, 1, self.slot_size)))
         
         self.project_q = nn.Linear(slot_size, slot_size, bias = False)
         self.project_k = nn.Linear(input_size, slot_size, bias = False)
@@ -56,14 +64,6 @@ class SlotAttention(nn.Module):
             nn.Linear(self.mlp_hidden_size, self.slot_size)
         )
 
-        self.simple = simple
-        if self.simple:
-            assert slot_size == input_size
-            self.norm_mlp = nn.Identity()
-            del self.gru; self.gru = lambda x, h, alpha = 0.5: h * alpha + x * (1 - alpha)
-            del self.mlp; self.mlp = torch.zeros_like
-        self.project_x = nn.Linear(input_size, input_size) if project_inputs else nn.Identity()
-
     def forward(self, inputs : 'BTC', num_iter = 0, slots : 'BSC' = None) -> '(BSC, BST, BST)':
         inputs = self.project_x(inputs)
 
@@ -72,7 +72,7 @@ class SlotAttention(nn.Module):
         v = self.project_v(inputs)
        
         if slots is None:
-            slots = self.slots_mu + torch.exp(self.slots_log_sigma) * torch.randn(len(inputs), self.num_slots, self.slot_size, device = self.slots_mu.device)
+            slots = self.slots_mu 
 
         for _ in range(num_iter or self.num_iter):
             slots_prev = slots
@@ -94,24 +94,26 @@ class SlotAttention(nn.Module):
 
         return slots, attn_logits, attn
 
-class SlotAttentionEncoder(nn.Sequential):
+class MotionGroupingEncoder(nn.Sequential):
     def __init__(self, hidden_dim = 64, kernel_size = 5, padding = 2):
         super().__init__(
-            nn.Conv2d(3,          hidden_dim, kernel_size = kernel_size, padding = padding), nn.ReLU(inplace = True),
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size = kernel_size, padding = padding), nn.ReLU(inplace = True),
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size = kernel_size, padding = padding), nn.ReLU(inplace = True),
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size = kernel_size, padding = padding), nn.ReLU(inplace = True),
+            nn.Conv2d(3,          1 * hidden_dim, kernel_size = kernel_size, padding = padding), nn.InstanceNorm2d(1 * hidden_dim), nn.ReLU(inplace = True), # instance norm
+            nn.MaxPool2d(2),
+            nn.Conv2d(hidden_dim, 2 * hidden_dim, kernel_size = kernel_size, padding = padding), nn.InstanceNorm2d(2 * hidden_dim), nn.ReLU(inplace = True), # instance norm
+            nn.MaxPool2d(2),
+            nn.Conv2d(hidden_dim, 4 * hidden_dim, kernel_size = kernel_size, padding = padding), nn.InstanceNorm2d(4 * hidden_dim), nn.ReLU(inplace = True), # instance norm
+            nn.MaxPool2d(2),
         )
 
-class SlotAttentionDecoder(nn.Sequential):
-    def __init__(self, hidden_dim = 64, output_dim = 4, kernel_size = 5, padding = 2, stride = 2, output_kernel_size = 3, output_padding = 1):
+class MotionGroupingDecoder(nn.Sequential):
+    def __init__(self, hidden_dim = 64, kernel_size = 5, padding = 2, stride = 2):
         super().__init__(
-            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size, stride = stride, padding = 1), nn.ReLU(inplace = True), # 3
-            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size, stride = stride, padding = 1), nn.ReLU(inplace = True), # 2
-            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size, stride = stride, padding = 1), nn.ReLU(inplace = True), # 2
-            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size, stride = stride, padding = 1), nn.ReLU(inplace = True), # 3
-            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size), nn.ReLU(inplace = True), # 1
-            nn.ConvTranspose2d(hidden_dim, output_dim, kernel_size = output_kernel_size) # 1
+            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size, stride = stride, padding = padding), nn.InstanceNorm2d(hidden_dim), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size, stride = stride, padding = padding), nn.InstanceNorm2d(hidden_dim), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size, stride = stride, padding = padding), nn.InstanceNorm2d(hidden_dim), nn.ReLU(inplace = True),
+            
+            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size), nn.InstanceNorm2d(hidden_dim), nn.ReLU(inplace = True)
+            nn.ConvTranspose2d(hidden_dim, 4, kernel_size = kernel_size)
         )
 
 class SoftPositionEmbed(nn.Module):
@@ -125,7 +127,7 @@ class SoftPositionEmbed(nn.Module):
         grid = torch.cat([grid, 1 - grid], dim = -1)
         return x + self.dense(grid)
 
-class SlotAttentionAutoEncoder(nn.Module):
+class MotionGroupingAutoEncoder(nn.Module):
     def __init__(self, resolution = (128, 128), num_slots = 8, num_iterations = 3, decoder_initial_size = (8, 8), hidden_dim = 64, interpolate_mode = 'bilinear'):
         super().__init__()
         self.interpolate_mode = interpolate_mode
@@ -135,8 +137,8 @@ class SlotAttentionAutoEncoder(nn.Module):
         self.decoder_initial_size = decoder_initial_size
         self.hidden_dim = hidden_dim
         
-        self.encoder_cnn = SlotAttentionEncoder()
-        self.encoder_pos = SoftPositionEmbed(self.hidden_dim, self.resolution)
+        self.encoder_cnn = MotionGroupingEncoder(hidden_dim = self.hidden_dim)
+        self.encoder_pos = SoftPositionEmbed(self.hidden_dim)
         
         self.layer_norm = nn.LayerNorm(self.hidden_dim)
         self.mlp = nn.Sequential(
@@ -149,11 +151,11 @@ class SlotAttentionAutoEncoder(nn.Module):
             num_iter = self.num_iterations,
             num_slots = self.num_slots,
             input_size = self.hidden_dim,
-            slot_size = 64,
-            mlp_hidden_size = 128)
+            slot_size = self.hidden_dim,
+            mlp_hidden_size = slot_size)
         
-        self.decoder_pos = SoftPositionEmbed(self.hidden_dim, self.decoder_initial_size)
-        self.decoder_cnn = SlotAttentionDecoder()
+        self.decoder_pos = SoftPositionEmbed(self.hidden_dim)
+        self.decoder_cnn = MotionGroupingDecoder(hidden_dim = self.hidden_dim)
 
     def forward(self, image):
         x = self.encoder_cnn(image).movedim(1, -1)
