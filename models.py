@@ -151,7 +151,7 @@ class MotionGroupingAutoEncoder(nn.Module):
             num_slots = self.num_slots,
             input_size = self.hidden_dim,
             slot_size = self.hidden_dim,
-            mlp_hidden_size = slot_size)
+            mlp_hidden_size = self.hidden_dim)
         
         self.decoder_pos = SoftPositionEmbed(self.hidden_dim)
         self.decoder_cnn = MotionGroupingDecoder(hidden_dim = self.hidden_dim)

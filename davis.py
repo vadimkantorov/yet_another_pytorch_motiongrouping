@@ -27,12 +27,14 @@ class DAVIS(torchvision.datasets.VisionDataset):
         # metadata DAVIS/Annotations/480p/lucia/00000.png
 
     def __getitem__(self, idx):
+        # TODO: fill out non-existing first element
         read_stack = lambda paths, **kwargs: self.pad(torch.stack([ torch.as_tensor(cv2.imread(frame_path)) for frame_path in paths ]).movedim(-1, 1)).flip(1).div(255.0) if paths and all(map(os.path.exists, paths)) else torch.empty(**kwargs)
         
         if self.read_frames:
             frames = read_stack(self.frames[idx])
             frames_flow = read_stack(self.frames_flow[idx], size = frames.shape, dtype = frames.dtype)
         else:
+            breakpoint()
             frames_flow = read_stack(self.frames_flow[idx])
             frames = read_stack(self.frames[idx], size = frames_flow.shape, dtype = frames_flow.dtype)
 
@@ -40,8 +42,6 @@ class DAVIS(torchvision.datasets.VisionDataset):
 
     def __len__(self):
         return len(self.frames)
-
-import numpy as np
 
 palette_str = '''0 0 0
 128 0 0

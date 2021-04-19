@@ -10,7 +10,7 @@ import models
 import davis
 
 def build_model(args):
-    model = models.SlotAttentionAutoEncoder(resolution = args.resolution, num_slots = args.num_slots, num_iterations = args.num_iterations, hidden_dim = args.hidden_dim).to(args.device)
+    model = models.MotionGroupingAutoEncoder(resolution = args.resolution, num_slots = args.num_slots, num_iterations = args.num_iterations, hidden_dim = args.hidden_dim).to(args.device)
         
     if args.checkpoint:
         model_state_dict = torch.load(args.checkpoint, map_location = 'cpu')['model_state_dict'] if args.checkpoint else rename_and_transpose_tfcheckpoint(torch.load(args.checkpoint_tensorflow, map_location = 'cpu')) 
@@ -58,13 +58,13 @@ def main(args):
 
         total_loss = 0
 
-        breakpoint()
         for i, (frames_paths, frames, flow_paths, flow) in enumerate(data_loader):
             learning_rate = (args.learning_rate * (iteration / args.warmup_steps) if iteration < args.warmup_steps else args.learning_rate) * (args.decay_rate ** int(iteration / args.decay_steps))
             loss_scale_consistency = args.loss_scale_consistency * (args.gamma_regularization ** int(iteration / args.decay_steps))
             loss_scale_entropy = args.loss_scale_entropy * (args.gamma_regularization ** int(iteration / args.decay_steps))
             optimizer.param_groups[0]['lr'] = learning_rate
             
+            breakpoint()
             flow = sample_frames_flow(flow)
             
             flow = batch_frontend(flow.to(args.device))
@@ -103,14 +103,13 @@ if __name__ == '__main__':
 
     parser.add_argument('--resolution', type = int, nargs = 2, default = (128, 224))
     parser.add_argument('--num-slots', default=2, type=int, help='Number of slots in Slot Attention.')
-    parser.add_argument('--num-slots', default=2, type=int, help='Number of slots in Slot Attention.')
     parser.add_argument('--hidden-dim', default=64, type=int, help='hidden dimension size')
     parser.add_argument('--loss-scale-reconstruction', type = float, default = 1e+2)
     parser.add_argument('--loss-scale-consistency', type = float, default = 1e-2)
     parser.add_argument('--loss-scale-entropy', type = float, default = 1e-2)
 
     parser.add_argument('--data-parallel', action = 'store_true') 
-    parser.add_argument('--device', default = 'cuda', choices = ['cuda', 'cpu'])
+    parser.add_argument('--device', default = 'cuda')
     parser.add_argument('--num-workers', default=16, type=int, help='number of workers for loading data')
     
     parser.add_argument('--checkpoint')
