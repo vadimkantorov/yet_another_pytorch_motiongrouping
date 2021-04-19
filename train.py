@@ -24,12 +24,12 @@ def build_model(args):
 
     return model
 
-def build_dataset(args):
+def build_dataset(args, read_frames = False):
     assert os.path.exists(args.dataset_root_dir), f'provided dataset path [{args.dataset_root_dir}] does not exist'
     
     if args.dataset == 'DAVIS':
-        dataset = davis.DAVIS(args.dataset_root_dir, args.dataset_split_name, root_flow = args.dataset_root_dir_flow, resolution = args.dataset_resolution, year = args.dataset_year, dt = args.dataset_dt, read_frames = False)
-        batch_frontend = models.FlowPreprocessor(resolution = args.resolution, crop = args.crop)
+        dataset = davis.DAVIS(args.dataset_root_dir, args.dataset_split_name, root_flow = args.dataset_root_dir_flow, resolution = args.dataset_resolution, year = args.dataset_year, dt = args.dataset_dt, read_frames = read_frames)
+        batch_frontend = models.FlowPreprocessor()
         collate_fn = lambda batch, default_collate = torch.utils.data.dataloader.default_collate: ( [b[0] for b in batch], default_collate([b[1] for b in batch]), [b[2] for b in batch], default_collate([b[3] for b in batch]) )
 
     return dataset, collate_fn, batch_frontend

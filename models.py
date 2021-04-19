@@ -18,16 +18,15 @@ def criterion(recon_combined, masks, images, loss_scale_reconstruction = 1, loss
     return loss_scale_reconstruction * loss_reconstruction + loss_scale_consistency * loss_consistency + loss_scale_entropy * loss_entropy
 
 class FlowPreprocessor(nn.Module):
-    def __init__(self, resolution, rgb_mean = 0.5, rgb_std = 0.5):
+    def __init__(self, rgb_mean = 0.5, rgb_std = 0.5):
         super().__init__()
-        self.resolution = resolution
-        self.crop = crop
+        self.rgb_mean = rgb_mean
+        self.rgb_std = rgb_std
         
     def forward(self, img, normalize = True, interpolate_mode = 'bilinear'):
         assert img.is_floating_point()
         img = (img - self.rgb_mean) / self.rgb_std if normalize else img
 
-        img = F.interpolate(img, self.resolution, mode = interpolate_mode)
         img = img.clamp(-1 if normalize else 0, 1)
 
         return img
@@ -112,7 +111,7 @@ class MotionGroupingDecoder(nn.Sequential):
             nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size, stride = stride, padding = padding), nn.InstanceNorm2d(hidden_dim), nn.ReLU(inplace = True),
             nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size, stride = stride, padding = padding), nn.InstanceNorm2d(hidden_dim), nn.ReLU(inplace = True),
             
-            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size), nn.InstanceNorm2d(hidden_dim), nn.ReLU(inplace = True)
+            nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size = kernel_size), nn.InstanceNorm2d(hidden_dim), nn.ReLU(inplace = True),
             nn.ConvTranspose2d(hidden_dim, 4, kernel_size = kernel_size)
         )
 
