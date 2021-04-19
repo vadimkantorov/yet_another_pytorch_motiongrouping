@@ -23,6 +23,7 @@ def main(args):
     dataset, collate_fn, batch_frontend = train.build_dataset(args, read_frames = True)
 
     print(args.checkpoint, args.dataset_root_dir, args.dataset_root_dir_flow)
+
     for idx, (frames_paths, frames, flow_paths, flow) in enumerate(dataset):
         assert frames.shape[-1] % 8 == 0 and frames.shape[-1] % 8 == 0
 
@@ -34,10 +35,11 @@ def main(args):
         #    continue
 
         flow_lo, flow_hi = model(img_src.expand(len(img_dst), -1, -1, -1), img_dst, iters = args.num_iter, test_mode = True)
-        print('frames:', frames.shape, 'flow lowres:', flow_lo.shape, 'flow hires:', flow_hi.shape)
 
         ufactor, vfactor = (args.resolution[-1] / flow_hi.shape[-1], args.resolution[-2] / flow_hi.shape[-2]) 
         flow = F.interpolate(flow_hi, args.resolution).movedim(1, -1) * torch.tensor([ufactor, vfactor], device = args.device)
+        
+        print('frames:', frames.shape, 'flow lowres:', flow_lo.shape, 'flow hires:', flow_hi.shape, 'flow:', flow.shape)
 
         os.makedirs(os.path.dirname(flow_dst[0]), exist_ok = True)
         for flo, flow_path in zip(flow.cpu(), flow_dst):
@@ -45,6 +47,8 @@ def main(args):
             cv2.imwrite(flow_path, flo.flip(-1).numpy())
 
         print(idx, '/', len(dataset))
+    
+    print(args.checkpoint, args.dataset_root_dir, args.dataset_root_dir_flow)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
