@@ -46,7 +46,7 @@ class SlotAttention(nn.Module):
         self.norm_slots  = nn.LayerNorm(slot_size)
         self.norm_mlp    = nn.LayerNorm(slot_size)
 
-        self.slots_mu        = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, 1, self.slot_size)))
+        self.slots_mu        = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, self.num_slots, self.slot_size)))
         
         self.project_q = nn.Linear(slot_size, slot_size, bias = False)
         self.project_k = nn.Linear(input_size, slot_size, bias = False)
@@ -63,15 +63,14 @@ class SlotAttention(nn.Module):
             nn.Linear(self.mlp_hidden_size, self.slot_size)
         )
 
-    def forward(self, inputs : 'BTC', num_iter = 0, slots : 'BSC' = None) -> '(BSC, BST, BST)':
+    def forward(self, inputs : 'BTC', num_iter = 0) -> '(BSC, BST, BST)':
         inputs = self.project_x(inputs)
 
         inputs = self.norm_inputs(inputs)
         k = self.project_k(inputs)
         v = self.project_v(inputs)
        
-        if slots is None:
-            slots = self.slots_mu 
+        slots = self.slots_mu 
 
         for _ in range(num_iter or self.num_iter):
             slots_prev = slots
