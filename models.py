@@ -70,7 +70,7 @@ class SlotAttention(nn.Module):
         k = self.project_k(inputs)
         v = self.project_v(inputs)
        
-        slots = self.slots_mu 
+        slots = self.slots_mu.expand(len(inputs), -1, -1)
 
         for _ in range(num_iter or self.num_iter):
             slots_prev = slots
