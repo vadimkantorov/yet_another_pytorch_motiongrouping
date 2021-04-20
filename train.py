@@ -35,7 +35,8 @@ def build_dataset(args, read_frames = False):
     return dataset, collate_fn, batch_frontend
 
 def sample_frames_flow(frames_flow):
-    idx = torch.stack([1 + torch.randperm(frames_flow.shape[1] - 1, device = frames_flow.device)[:2] for b in range(len(frames_flow))])
+    # batched randperm is not supported yet: https://github.com/pytorch/pytorch/issues/42502
+    idx = 1 + torch.rand(frames_flow.shape[0], frames_flow.shape[1] - 1, device = frames_flow.device).argsort(dim = 1)[:, :2]
     return frames_flow.gather(1, idx[..., None, None, None].expand(-1, -1, *frames_flow.shape[-3:])).transpose(0, 1).flatten()
 
 def main(args):
@@ -91,7 +92,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', default=0, type=int, help='Random seed.')
-    parser.add_argument('--batch-size', default=64, type=int, help='Batch size for the model.')
+    parser.add_argument('--batch-size', default=32, type=int, help='Batch size for the model.')
     parser.add_argument('--num-iterations', default=5, type=int, help='Number of attention iterations.')
     parser.add_argument('--num-train-steps', default=300_000, type=int, help='Number of training steps.')
     parser.add_argument('--learning-rate', default=0.0005, type=float, help='Learning rate.')
