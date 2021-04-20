@@ -28,13 +28,18 @@ class DAVIS(torchvision.datasets.VisionDataset):
 
     def __getitem__(self, idx):
         # TODO: fill out non-existing first element
-        read_stack = lambda paths, **kwargs: self.pad(torch.stack([ torch.as_tensor(cv2.imread(frame_path)) for frame_path in paths ]).movedim(-1, 1)).flip(1).div(255.0) if paths and all(map(os.path.exists, paths)) else torch.empty(**kwargs)
+        def read_stack(paths, **kwargs):
+            if paths and all(map(os.path.exists, paths[1:])):
+                imgs = [ torch.as_tensor(cv2.imread(frame_path)) for frame_path in paths[1:] ]
+                imgs.insert(0, torch.as_tensor(cv2.imread(paths[0])) if os.path.exists(paths[0]) else torch.zeros_like(imgs[0]))
+                return self.pad(torch.stack(imgs).movedim(-1, 1)).flip(1).div(255.0) 
+            else:
+                return torch.empty(**kwargs)
         
         if self.read_frames:
             frames = read_stack(self.frames[idx])
             frames_flow = read_stack(self.frames_flow[idx], size = frames.shape, dtype = frames.dtype)
         else:
-            breakpoint()
             frames_flow = read_stack(self.frames_flow[idx])
             frames = read_stack(self.frames[idx], size = frames_flow.shape, dtype = frames_flow.dtype)
 

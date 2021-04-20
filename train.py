@@ -35,8 +35,8 @@ def build_dataset(args, read_frames = False):
     return dataset, collate_fn, batch_frontend
 
 def sample_frames_flow(frames_flow):
-    idx = torch.stack([1 + torch.randperm(2, device = frames_flow.device) for b in range(len(frames_flow))])
-    return frames_flow.gather(1, idx[..., None, None, None].expand(-1, -1, *frames_flow.shape[-3:]))
+    idx = torch.stack([1 + torch.randperm(frames_flow.shape[1] - 1, device = frames_flow.device)[:2] for b in range(len(frames_flow))])
+    return frames_flow.gather(1, idx[..., None, None, None].expand(-1, -1, *frames_flow.shape[-3:])).transpose(0, 1).flatten()
 
 def main(args):
     os.makedirs(args.checkpoint_dir, exist_ok = True)
